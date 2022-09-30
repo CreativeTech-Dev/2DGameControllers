@@ -143,6 +143,7 @@ public class PlatformMovementPro : MonoBehaviour
             localScale.x *= -1;
             transform.localScale = localScale;
         }
+        
     }
 
     IEnumerator Dash() {
