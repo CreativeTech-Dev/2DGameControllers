@@ -32,14 +32,26 @@ public class PlatformMovementPro : MonoBehaviour
     [Header("Ground")]
     public Transform groundCheck;
     public LayerMask groundLayer;
-    Vector2 capsuleCheckSize = new Vector2(1f, 0.2f);
-
+    public Vector2 capsuleCheckSize = new Vector2(0.8f, 0.2f);
     [Header("Dash")]
     public bool canDash = true;
     private bool isDashing;
     public float dashPower = 24f;
     public float dashTime = 0.2f;
     public float dashCooldown = 1f;
+
+    [Header("Wall slide system")]
+    public bool useWallJunping = true;
+    public Transform wallCheckPos;
+    public Vector2 wallCapsuleCheckSize = new Vector2(0.1f, 1.5f);
+    public bool isGrounded;
+    public bool isWallTouch;
+    public bool isSliding;
+    public float wallSlidingSpeed = 1f;
+    public float wallJumpDuration;
+    public Vector2 wallJumpFore;
+    bool wallJumping;
+
 
     TrailRenderer tr;
     bool isFacingRight = true;
@@ -52,6 +64,7 @@ public class PlatformMovementPro : MonoBehaviour
         vecGravity = new Vector2(0, -Physics2D.gravity.y);
         rb = GetComponent<Rigidbody2D>();
         tr = GetComponent<TrailRenderer>();
+        isWallTouch = false;
 
         startPos = transform.position;
     }
@@ -66,9 +79,30 @@ public class PlatformMovementPro : MonoBehaviour
             coyoteTimeCounter -= Time.deltaTime;
         }
 
+
         move.x = Input.GetAxis("Horizontal") * speed;
         move.y = rb.velocity.y;
 
+        if (useWallJunping) {
+
+        
+            isWallTouch = Physics2D.OverlapCapsule(wallCheckPos.position, wallCapsuleCheckSize, CapsuleDirection2D.Vertical, 0, groundLayer);
+            if (isWallTouch && !isGrounded && move.x != 0) {
+                isSliding = true;
+            } else {
+                isSliding = false;
+            }
+
+            if (isSliding) {
+                move.y = Mathf.Clamp(rb.velocity.y, -wallSlidingSpeed, float.MaxValue);//-wallSlidingSpeed;
+                rb.velocity = move;//new Vector2(rb.velocity.x, wallSlidingSpeed);//Mathf.Clamp(rb.velocity.y, -wallSlidingSpeed, float.MaxValue));
+            }
+            if (wallJumping) {
+                move.x *= -wallJumpFore.x;
+                move.y = wallJumpFore.y;
+                rb.velocity = move;
+            }
+        }
         if (!isDashing) {
             rb.velocity = move;
         }
@@ -87,6 +121,10 @@ public class PlatformMovementPro : MonoBehaviour
             move.y = jumpPower;
             rb.velocity = move;
         }
+        else if (isSliding && Input.GetButtonDown("Jump")) {
+            wallJumping = true;
+            Invoke("StopWallJump", wallJumpDuration);
+        }
 
         if (rb.velocity.y > 0 && isJumping) {
             jumpCounter += Time.deltaTime;
@@ -104,7 +142,7 @@ public class PlatformMovementPro : MonoBehaviour
             rb.velocity += vecGravity * (currentJumpMultiplier * Time.deltaTime);
         }
 
-        if (Input.GetButtonUp("Jump")) {
+        if (Input.GetButtonUp("Jump") && !isWallTouch) {
             isJumping = false;
             jumpCounter = 0;
             coyoteTimeCounter = 0;
@@ -113,7 +151,7 @@ public class PlatformMovementPro : MonoBehaviour
             }
         }
 
-        if (rb.velocity.y < 0) {
+        if (rb.velocity.y < 0 && !isWallTouch) {
             rb.velocity -= vecGravity * (fallMultiplier * Time.deltaTime);
 
         }
@@ -125,15 +163,24 @@ public class PlatformMovementPro : MonoBehaviour
         Flip();
     }
 
+    public Vector3 GetRestartPos() {
+        return GetComponent<PlayerReset>().GetRestartPos();
+    }
+
+    void StopWallJump() {
+        wallJumping = false;
+    }
+
     void FixedUpdate() {
         if (transform.position.y < resetYValue) {
             rb.velocity = Vector2.zero;
-            transform.position = startPos;
+            transform.position = GetRestartPos();
         }
     }
 
     bool IsGrounded() {
-        return Physics2D.OverlapCapsule(groundCheck.position, capsuleCheckSize, CapsuleDirection2D.Horizontal, 0, groundLayer);
+        isGrounded = Physics2D.OverlapCapsule(groundCheck.position, capsuleCheckSize, CapsuleDirection2D.Horizontal, 0, groundLayer);
+        return isGrounded;
     }
 
     void Flip() {
